@@ -1,0 +1,39 @@
+# Configuración de la aplicación Spring Boot
+server:
+  port: 8080
+
+# Configuración de Spring
+spring:
+  # Base de datos H2 (en memoria para desarrollo)
+  datasource:
+    url: jdbc:h2:mem:testdb
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+
+  # Configuración de JPA/Hibernate
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: create-drop  # Crea tablas al iniciar, las borra al parar
+    show-sql: true  # Muestra las queries SQL en los logs
+    properties:
+      hibernate:
+        format_sql: true  # Formatea las queries para mejor legibilidad
+
+  # Consola H2 (para ver la base de datos en el navegador)
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+# Configuración JWT personalizada
+jwt:
+  secret: "mySecretKeyForJwtTokenGenerationThatShouldBeLongEnoughForSecurity123456789"
+  expiration: 86400000  # 24 horas en milisegundos (24 * 60 * 60 * 1000)
+
+# Configuración de logging
+logging:
+  level:
+    com.davidfernandez.jwt_auth_api: DEBUG  # Logs detallados de tu aplicación
+    org.springframework.security: DEBUG     # Logs de Spring Security (útil para debugging)
