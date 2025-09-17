@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  # Spring Boot Application (Development with H2)
+  jwt-auth-api-dev:
+    build: .
+    container_name: jwt-auth-api-dev
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      SPRING_DATASOURCE_URL: jdbc:h2:mem:testdb
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.h2.Driver
+      SPRING_DATASOURCE_USERNAME: sa
+      SPRING_DATASOURCE_PASSWORD: ""
+      SPRING_H2_CONSOLE_ENABLED: true
+      SPRING_JPA_HIBERNATE_DDL_AUTO: create-drop
+      JWT_SECRET: dev-secret-key-not-for-production
+      JWT_EXPIRATION: 86400000
+    ports:
+      - "8080:8080"
+    networks:
+      - jwt-auth-dev-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8080/public/test || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  jwt-auth-dev-network:
+    driver: bridge
