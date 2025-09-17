@@ -16,6 +16,7 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 /**
  * Servicio principal de autenticación
@@ -32,26 +33,26 @@ public class AuthService implements UserDetailsService {
     private final UserRepository userRepository;
     private final JwtService jwtService;
     private final PasswordEncoder passwordEncoder;
-    private final AuthenticationManager authenticationManager;
+    // private final AuthenticationManager authenticationManager; // Eliminar esta dependencia
 
     // Constructor - Spring inyecta automáticamente las dependencias
     @Autowired
     public AuthService(UserRepository userRepository,
                        JwtService jwtService,
-                       PasswordEncoder passwordEncoder,
-                       AuthenticationManager authenticationManager) {
+                       PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
         this.jwtService = jwtService;
         this.passwordEncoder = passwordEncoder;
-        this.authenticationManager = authenticationManager;
+        // this.authenticationManager = authenticationManager; // Eliminar
     }
 
     /**
      * Procesa el login del usuario
      *
-     * 1. Valida las credenciales con Spring Security
-     * 2. Si es válido, genera un token JWT
-     * 3. Devuelve la respuesta con token + info del usuario
+     * 1. Busca el usuario en la base de datos
+     * 2. Valida la password manualmente con BCrypt
+     * 3. Si es válido, genera un token JWT
+     * 4. Devuelve la respuesta con token + info del usuario
      *
      * @param request credenciales del usuario (username, password)
      * @return LoginResponse con token JWT y datos del usuario
@@ -59,23 +60,24 @@ public class AuthService implements UserDetailsService {
      */
     public LoginResponse login(LoginRequest request) {
         try {
-            // 1. Autenticar con Spring Security
-            Authentication authentication = authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(
-                            request.getUsername(),
-                            request.getPassword()
-                    )
-            );
+            // 1. Buscar usuario en la base de datos
+            User user = userRepository.findByUsername(request.getUsername())
+                    .orElseThrow(() -> new BadCredentialsException("Usuario no encontrado"));
 
-            // 2. Si llegamos aquí, las credenciales son válidas
-            UserDetails userDetails = (UserDetails) authentication.getPrincipal();
-            User user = userRepository.findByUsername(userDetails.getUsername())
-                    .orElseThrow(() -> new UsernameNotFoundException("Usuario no encontrado"));
+            // 2. Verificar que la password coincida
+            if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+                throw new BadCredentialsException("Password incorrecta");
+            }
 
-            // 3. Generar token JWT
-            String token = jwtService.generateToken(userDetails);
+            // 3. Verificar que el usuario esté habilitado
+            if (!user.isEnabled()) {
+                throw new BadCredentialsException("Usuario deshabilitado");
+            }
 
-            // 4. Crear y devolver respuesta
+            // 4. Generar token JWT
+            String token = jwtService.generateToken(user);
+
+            // 5. Crear y devolver respuesta
             return new LoginResponse(
                     token,
                     user.getUsername(),
@@ -83,8 +85,10 @@ public class AuthService implements UserDetailsService {
                     user.getRole().name()
             );
 
+        } catch (BadCredentialsException e) {
+            throw e; // Re-lanzar tal como está
         } catch (Exception e) {
-            throw new BadCredentialsException("Credenciales inválidas");
+            throw new BadCredentialsException("Error en autenticación: " + e.getMessage());
         }
     }
 

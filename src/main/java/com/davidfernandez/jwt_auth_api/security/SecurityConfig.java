@@ -1,7 +1,6 @@
 package com.davidfernandez.jwt_auth_api.security;
 
 import com.davidfernandez.jwt_auth_api.service.AuthService;
-import jakarta.servlet.Filter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -14,73 +13,77 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 /**
- * Configuración principal de Spring Security con autenticación JWT
+ * Main Spring Security configuration with JWT authentication
  *
- * Esta clase configura:
- * - Qué endpoints están protegidos y cuáles son públicos
- * - Cómo se autentica a los usuarios (JWT vs formulario)
- * - Los beans necesarios para el sistema de autenticación
- * - El filtro JWT personalizado
+ * This class configures:
+ * - Which endpoints are protected and which are public
+ * - How users are authenticated (JWT vs form)
+ * - The beans needed for the authentication system
+ * - The custom JWT filter
  */
 @Configuration
-@EnableWebSecurity  // Habilita Spring Security
-@EnableMethodSecurity  // Permite usar @PreAuthorize en métodos
+@EnableWebSecurity  // Enable Spring Security
+@EnableMethodSecurity  // Allow using @PreAuthorize on methods
 public class SecurityConfig {
 
     private final AuthService authService;
     private final JwtAuthFilter jwtAuthFilter;
+    private final PasswordEncoder passwordEncoder;
 
     @Autowired
-    public SecurityConfig(AuthService authService, JwtAuthFilter jwtAuthFilter) {
+    public SecurityConfig(AuthService authService,
+                          JwtAuthFilter jwtAuthFilter,
+                          PasswordEncoder passwordEncoder) {
         this.authService = authService;
         this.jwtAuthFilter = jwtAuthFilter;
+        this.passwordEncoder = passwordEncoder;
     }
 
     /**
-     * Configuración principal de seguridad
-     * Define qué endpoints están protegidos y cómo
+     * Main security configuration
+     * Defines which endpoints are protected and how
      */
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-                // Deshabilitar CSRF (no lo necesitamos para APIs REST con JWT)
+                // Disable CSRF (not needed for REST APIs with JWT)
                 .csrf(AbstractHttpConfigurer::disable)
 
-                // Configurar autorización de endpoints
+                // Configure endpoint authorization
                 .authorizeHttpRequests(auth -> auth
-                        // Endpoints públicos (no requieren autenticación)
-                        .requestMatchers("/auth/**").permitAll()  // Login, registro
-                        .requestMatchers("/h2-console/**").permitAll()  // Base de datos H2
-                        .requestMatchers("/actuator/**").permitAll()  // Spring Actuator (si lo usas)
+                        // Public endpoints (no authentication required)
+                        .requestMatchers("/auth/**").permitAll()  // Login, register
+                        .requestMatchers("/h2-console/**").permitAll()  // H2 database
+                        .requestMatchers("/actuator/**").permitAll()  // Spring Actuator (if used)
+                        .requestMatchers("/public/**").permitAll()  // Public test endpoints
 
-                        // Endpoints que requieren rol ADMIN
+                        // Endpoints that require ADMIN role
                         .requestMatchers("/admin/**").hasRole("ADMIN")
 
-                        // Endpoints que requieren rol USER o ADMIN
+                        // Endpoints that require USER or ADMIN role
                         .requestMatchers("/user/**").hasAnyRole("USER", "ADMIN")
 
-                        // Cualquier otra petición requiere autenticación
+                        // Any other request requires authentication
                         .anyRequest().authenticated()
                 )
 
-                // Configurar manejo de sesiones (sin estado para JWT)
+                // Configure session management (stateless for JWT)
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
 
-                // Configurar proveedor de autenticación
+                // Configure authentication provider
                 .authenticationProvider(authenticationProvider())
 
-                // Añadir nuestro filtro JWT antes del filtro de username/password
-                .addFilterBefore((Filter) jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
+                // Add our JWT filter before username/password filter
+                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
 
-                // Configurar headers para H2 Console
+                // Configure headers for H2 Console
                 .headers(headers -> headers
                         .frameOptions(frameOptions -> frameOptions.sameOrigin())
                 );
@@ -89,28 +92,19 @@ public class SecurityConfig {
     }
 
     /**
-     * Bean para encriptar passwords
-     * BCrypt es muy seguro y recomendado por Spring Security
-     */
-    @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
-    }
-
-    /**
-     * Proveedor de autenticación personalizado
-     * Conecta nuestro AuthService con el PasswordEncoder
+     * Custom authentication provider
+     * Connects our AuthService with the PasswordEncoder
      */
     @Bean
     public AuthenticationProvider authenticationProvider() {
         DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
-        authProvider.setUserDetailsService(authService);  // Nuestro AuthService
-        authProvider.setPasswordEncoder(passwordEncoder());  // BCrypt
+        authProvider.setUserDetailsService(authService);  // Our AuthService
+        authProvider.setPasswordEncoder(passwordEncoder);  // BCrypt from BeanConfig
         return authProvider;
     }
 
     /**
-     * AuthenticationManager bean requerido para el proceso de login
+     * AuthenticationManager bean required for login process
      */
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration config)
